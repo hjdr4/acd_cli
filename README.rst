@@ -1,6 +1,8 @@
-|Donate| |Gitter| |PyVersion| |Status| |License| |Build| |PyPiVersion|
 
-acd\_cli is currently not usable for casual users who are not in possession of a whitelisted security profile. Please do not try to obtain or use other projects' security profile details. Also, please use the Gitter chat linked to above.
+Clone this project and get into its directory  
+Create a token using https://go-acd.appspot.com/  
+Convert token from go-acd format to acd_cli format using : `cat <go-acd-token> | tokenConverter/convert.py > ~/.cache/acd_cli/oauth_data`  
+
 ========
 
 **acd\_cli** provides a command line interface to Amazon Drive and allows Unix users to mount
