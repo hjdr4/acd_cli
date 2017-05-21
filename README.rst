@@ -1,6 +1,8 @@
 
 Clone this project and get into its directory  
+
 Create a token using https://go-acd.appspot.com/  
+
 Convert token from go-acd format to acd_cli format using : `cat <go-acd-token> | tokenConverter/convert.py > ~/.cache/acd_cli/oauth_data`  
 
 ========
