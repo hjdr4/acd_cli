@@ -38,12 +38,12 @@ def utc2local (utc):
     offset = datetime.datetime.fromtimestamp (epoch) - datetime.datetime.utcfromtimestamp (epoch)
     return utc + offset
 
-def rfc3339NanoUTCToDatetime(s):
+def rfc3339NanoUTC_to_local_timestamp(s):
     _input=s[0:19]
-    return utc2local(datetime.datetime.strptime(_input, '%Y-%m-%dT%H:%M:%S'))
+    return utc2local(datetime.datetime.strptime(_input, '%Y-%m-%dT%H:%M:%S')).timestamp()
 
-def datetimeTorfc3339NanoUTC(d: datetime.datetime):
-    return d.utcnow().isoformat("T")+"000Z"
+def local_timestamp_to_rfc3339NanoUTC(t):
+    return datetime.datetime.fromtimestamp(t).utcnow().isoformat("T")+"000Z"
     
 class OAuthHandler(AuthBase):
     OAUTH_DATA_FILE = 'oauth_data'
@@ -62,7 +62,7 @@ class OAuthHandler(AuthBase):
     
     @property
     def exp_time(self):
-        return rfc3339NanoUTCToDatetime(self.token.expiry).timestamp()
+        return rfc3339NanoUTC_to_local_timestamp(self.token.expiry)-120
 
     @classmethod
     def validate(cls, oauth: str):
@@ -83,56 +83,29 @@ class OAuthHandler(AuthBase):
                             'Token:\n%s' % oauth)
             raise RequestError(RequestError.CODE.INVALID_TOKEN, e.__str__())
 
-    def treat_auth_token(self, time_: float):
-        """Adds expiration time to member OAuth dict using specified begin time."""
-        exp_time = time_ + rfc3339NanoUTCToDatetime(self.token.expiry).timestamp() - 120
-        self.token.expiry = datetimeTorfc3339NanoUTC(datetime.datetime.fromtimestamp(exp_time))
-        logger.info('New token expires at %s.'
-                    % datetime.datetime.fromtimestamp(exp_time).isoformat(' '))
-
     def load_oauth_data(self):
-        """Loads oauth data file, validate and add expiration time if necessary"""
         self.check_oauth_file_exists()
 
         with open(self.oauth_data_path) as oa:
             o = oa.read()
         try:
             self.token = self.validate(o)
+            logger.info("Current token is valid up to %s" % datetime.datetime.fromtimestamp(self.exp_time).isoformat(' '))
         except:
             logger.critical('Local OAuth data file "%s" is invalid. '
                             'Please fix or delete it.' % self.oauth_data_path)
-            raise
-        
-        if not self.token.expiry:
-            self.treat_auth_token(self.init_time)
-            self.write_oauth_data()
-        else:
-            self.get_auth_token(reload=False)
+            raise    
 
-    def get_auth_token(self, reload=True) -> str:
-        """Gets current access token, refreshes if necessary.
-
-        :param reload: whether the oauth token file should be reloaded (external update)"""
-
+    def get_auth_token(self, reload=True) -> str:    
         if time.time() > self.exp_time:
             logger.info('Token expired at %s.'
                         % datetime.datetime.fromtimestamp(self.exp_time).isoformat(' '))
-
-            # if multiple instances are running, check for updated file
-            if reload:
-                with open(self.oauth_data_path) as oa:
-                    o = oa.read()
-                self.oauth_data = self.validate(o)
-
-            if time.time() > self.exp_time:
-                self.refresh_auth_token()
-            else:
-                logger.info('Externally updated token found in oauth file.')
+            
+            self.refresh_auth_token()
+            
         return "Bearer " + self.token.access_token
 
     def write_oauth_data(self):
-        """Dumps (treated) OAuth dict to file as JSON."""
-
         new_nm = self.oauth_data_path + ''.join(random.choice(string.hexdigits) for _ in range(8))
         rm_nm = self.oauth_data_path + ''.join(random.choice(string.hexdigits) for _ in range(8))
 
@@ -206,8 +179,7 @@ class AppspotOAuthHandler(OAuthHandler):
 
         logger.info('Refreshing authentication token.')
 
-        ref = self.token.toJSON()
-        t = time.time()
+        ref = self.token.toJSON()       
 
         from .common import RequestError, ConnectionError
 
@@ -224,6 +196,7 @@ class AppspotOAuthHandler(OAuthHandler):
         r = self.validate(response.text)
 
         self.token = r
-        self.treat_auth_token(t)
         self.write_oauth_data()
+        logger.info('New token will be refreshed from %s.'
+                    % datetime.datetime.fromtimestamp(self.exp_time).isoformat(' '))
 
